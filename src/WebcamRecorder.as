@@ -130,18 +130,24 @@ package
 		
 		public function record( recordId:String ):void
 		{
+			// Error if we are already recording
+			if( _publishStream || _currentRecordId )
+			{
+				log( 'error', 'record - Already recording! You have to call stopRecording() before recording again.' );
+				return;
+			}
+			
 			if( !recordId || recordId.length == 0 )
 			{
 				log( 'error', 'record - recordId must be a non-empty string' );
 				return;
 			}
 			
-			// If there is a playback in progress, we stop it and connect the preview video to the webcam
+			// If there is a playback in progress, we stop it
 			if( _playStream )
 			{
 				log( 'info', 'record - Stopped playback to record' );
 				stopPlayStream();
-				setUpRecording();
 			}
 			
 			_currentRecordId = recordId;
@@ -173,7 +179,7 @@ package
 		{
 			if( !_publishStream )
 			{
-				log( 'error', 'pauseRecording - Not recording!' );
+				log( 'error', 'pauseRecording - Not recording, or recording already paused.' );
 				return;
 			}
 			
@@ -211,7 +217,7 @@ package
 				return;
 			}
 			
-			if( _publishStream )
+			if( _currentRecordId )
 			{
 				log( 'error', 'play - Currently recording. You have to call stopRecording() before play().' );
 				return;
@@ -226,9 +232,20 @@ package
 			startPlayStream( _previousRecordId );
 		}
 		
+		/**
+		 * Go to the keyframe closest to the specified time.
+		 * 
+		 * @param time Number: Time to seek (in seconds).
+		 */
 		public function seek( time:Number ):void
 		{
-			return;
+			if( !_playStream )
+			{
+				log( 'error', 'seek - Not playing anything!' );
+				return;
+			}
+			
+			_playStream.seek( time );
 		}
 		
 		/** Pause the current playback */
@@ -249,6 +266,18 @@ package
 		//			PRIVATE METHODS			  //
 		//									  //
 		//------------------------------------//
+		
+		/**
+		 * Listen to the server connection status. Set up the JS API
+		 * if the connection was successful.
+		 */
+		private function onConnectionStatus( event:NetStatusEvent ):void
+		{
+			if( event.info.code == "NetConnection.Connect.Success" )
+				setUpJSApi();
+			else if( event.info.code == "NetConnection.Connect.Failed" || event.info.code == "NetConnection.Connect.Rejected" )
+				log( 'error', 'Connection error: ' + event.info.description );
+		}
 		
 		/** Set up the JS API */
 		private function setUpJSApi():void
@@ -283,32 +312,6 @@ package
 			_notificationTimer = setTimeout( notify, 1/(notificationFrequency*1000) );
 		}
 		
-		/** Trace a log message and forward it to the Javascript console */
-		private function log( level:String, msg:String ):void
-		{
-			trace( level.toLocaleUpperCase() + ' :: ' + msg );
-			if( ExternalInterface.available )
-				ExternalInterface.call( 'console.'+level, msg );
-		}
-		
-		/** Trigger the sending of a notification to the JS listener */
-		private function notify():void
-		{
-			return;
-		}
-		
-		/**
-		 * Listen to the server connection status. Set up the JS API
-		 * if the connection was successful.
-		 */
-		private function onConnectionStatus( event:NetStatusEvent ):void
-		{
-			if( event.info.code == "NetConnection.Connect.Success" )
-				setUpJSApi();
-			else if( event.info.code == "NetConnection.Connect.Failed" || event.info.code == "NetConnection.Connect.Rejected" )
-				log( 'error', 'Connection error: ' + event.info.description );
-		}
-		
 		/** Set up the recording device(s) (webcam and/or microphone) */
 		private function setUpRecording():void
 		{
@@ -333,6 +336,27 @@ package
 				_microphone = Microphone.getMicrophone();
 				_microphone.rate = 11;
 			}
+		}
+		
+		/** Set up the player */
+		private function setUpPlaying():void
+		{
+			_videoPreview.attachCamera( null );
+			_videoPreview.attachNetStream( _playStream );
+		}
+		
+		/** Trace a log message and forward it to the Javascript console */
+		private function log( level:String, msg:String ):void
+		{
+			trace( level.toLocaleUpperCase() + ' :: ' + msg );
+			if( ExternalInterface.available )
+				ExternalInterface.call( 'console.'+level, msg );
+		}
+		
+		/** Trigger the sending of a notification to the JS listener */
+		private function notify():void
+		{
+			return;
 		}
 		
 		/**
@@ -390,13 +414,6 @@ package
 			_publishStream = null;
 		}
 		
-		/** Stop the play stream */
-		private function stopPlayStream():void
-		{
-			_playStream.pause();
-			_playStream = null;
-		}
-		
 		/**
 		 * Start the play stream.
 		 * 
@@ -412,15 +429,23 @@ package
 			// Replace the webcam preview by the stream playback
 			setUpPlaying();
 			
+			// Add an event listener to go back to the webcam preview when the playing is finished
+			_playStream.client.onPlayStatus = function( info:Object ):void
+			{
+				if( info.code == "NetStream.Play.Complete" )
+					stopPlayStream();
+			}
+			
 			// Start the playback
 			_playStream.play( _previousRecordId );
 		}
 		
-		/** Set up the player */
-		private function setUpPlaying():void
+		/** Stop the play stream */
+		private function stopPlayStream():void
 		{
-			_videoPreview.attachCamera( null );
-			_videoPreview.attachNetStream( _playStream );
+			_playStream.pause();
+			_playStream = null;
+			setUpRecording();
 		}
 	}
 }
