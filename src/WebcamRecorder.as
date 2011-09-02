@@ -248,6 +248,18 @@ package
 			_playStream.seek( time );
 		}
 		
+		/** Stop the current playbock */
+		public function stopPlaying():void
+		{
+			if( !_playStream )
+			{
+				log( 'error', 'stopPlaying - Not playing anything!' );
+				return;
+			}
+			
+			stopPlayStream();
+		}
+		
 		/** Pause the current playback */
 		public function pausePlaying():void
 		{
