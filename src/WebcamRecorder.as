@@ -41,6 +41,15 @@ package
 		/** Recording mode using the microphone to record audio */
 		public static const AUDIO : String = "audio";
 		
+		/** Type of the notification dispatched when a recording starts */
+		public static const STARTED_RECORDING : String = "StartedRecording";
+		
+		/** Type of the notification dispatched when a playback starts */
+		public static const STARTED_PLAYING : String = "StartedPlaying";
+		
+		/** Type of the notification dispatched when a playback pauses */
+		public static const PAUSED_PLAYING : String = "PausedPlaying";
+		
 		/** The Wowza server URL */
 		private static const SERVER_URL : String = "rtmp://localhost/WebcamRecorder";
 		
@@ -150,8 +159,10 @@ package
 				stopPlayStream();
 			}
 			
+			// Start recording and dispatch a notification
 			_currentRecordId = recordId;
 			startPublishStream( recordId, false );
+			notify( STARTED_RECORDING );
 		}
 		
 		/** Stop the current recording without the possibility to resume it. */
@@ -210,10 +221,11 @@ package
 		 */
 		public function play():void
 		{
-			// If we already started playing, we just resume
+			// If we already started playing, we just resume and dispatch a notification
 			if( _playStream )
 			{
 				_playStream.resume();
+				notify( STARTED_PLAYING );
 				return;
 			}
 			
@@ -229,7 +241,11 @@ package
 				return;
 			}
 			
+			// Start the play stream
 			startPlayStream( _previousRecordId );
+			
+			// Dispatch an notification
+			notify( STARTED_PLAYING );
 		}
 		
 		/**
@@ -270,6 +286,9 @@ package
 			}
 			
 			_playStream.pause();
+			
+			// Dispatch a notification
+			notify( PAUSED_PLAYING );
 		}
 		
 		
@@ -319,9 +338,12 @@ package
 			if( !( notificationFrequency >= 0 ) )
 				log( 'warn', 'init - notificationFrequency has to be greater or equal to zero! We won\' notify for this session.' );
 			
+			if( notificationFrequency == 0 )
+				return;
+			
 			// Set up the notifications
 			_jsListener = jsListener;
-			_notificationTimer = setTimeout( notify, 1/(notificationFrequency*1000) );
+			_notificationTimer = setTimeout( notify, (1/notificationFrequency)*1000 );
 		}
 		
 		/** Set up the recording device(s) (webcam and/or microphone) */
@@ -366,9 +388,12 @@ package
 		}
 		
 		/** Trigger the sending of a notification to the JS listener */
-		private function notify():void
+		private function notify( type:String = null, arguments:Object = null ):void
 		{
-			return;
+			if( !_jsListener || !ExternalInterface.available )
+				return;
+			
+			ExternalInterface.call( _jsListener, type, arguments );
 		}
 		
 		/**
