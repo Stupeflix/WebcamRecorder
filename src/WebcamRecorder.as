@@ -35,7 +35,7 @@ package
 		//									  //
 		//------------------------------------//
 		
-		/** Recording mode using the webcam to record video */
+		/** Recording mode using the webcam to record video and the microphone to record audio */
 		public static const VIDEO : String = "video";
 		
 		/** Recording mode using the microphone to record audio */
@@ -57,16 +57,17 @@ package
 		//									  //
 		//------------------------------------//
 		
-		protected var videoPreview : Video;
-		
 		private var _recordingMode : String;
 		private var _serverConnection : NetConnection;
 		private var _jsListener : String;
 		private var _notificationTimer : uint;
+		private var _videoPreview : Video;
 		private var _webcam : Camera;
 		private var _microphone : Microphone;
 		private var _publishStream : NetStream;
+		private var _playStream : NetStream;
 		private var _currentRecordId : String;
+		private var _previousRecordId : String;
 		private var _flushBufferTimer : uint;
 		
 		
@@ -77,14 +78,17 @@ package
 		//									  //
 		//------------------------------------//
 		
-		/** Constructor: Set up the JS API when the application is ready */
+		/** Constructor: Try to connect to the server */
 		public function WebcamRecorder()
 		{
-			setUpJSApi();
+			// Connect to the server
+			_serverConnection = new NetConnection();
+			_serverConnection.addEventListener( NetStatusEvent.NET_STATUS, onConnectionStatus );
+			_serverConnection.connect( SERVER_URL );
 		}
 		
 		/**
-		 * Initialize the recorder by connecting it to the server.
+		 * Initialize the recorder.
 		 * 
 		 * @param recordingMode String: Can be either WebcamRecorder.VIDEO or WebcamRecorder.AUDIO.
 		 * Note that WebcamRecorder.VIDEO includes audio recording if a microphone is available.
@@ -97,6 +101,13 @@ package
 		 */
 		public function init( recordingMode:String, jsListener:String, notificationFrequency:Number ):void
 		{
+			// The recorder can be initialized only once
+			if( _recordingMode )
+			{
+				log( 'error', 'init - Recorder already initialized!' );
+				return;
+			}
+			
 			// Check the recording mode
 			if( !( recordingMode == VIDEO || recordingMode == AUDIO ) )
 			{
@@ -104,16 +115,17 @@ package
 				return;
 			}
 			
-			// Set the recording mode
+			// Set up the recording
 			_recordingMode = recordingMode;
+			if( recordingMode == VIDEO )
+			{
+				_videoPreview = new Video( VIDEO_WIDTH, VIDEO_HEIGHT );
+				FlexGlobals.topLevelApplication.stage.addChild( _videoPreview );
+			}
+			setUpRecording();
 			
 			// Set up the JS notifications
 			setUpJSNotifications( jsListener, notificationFrequency );
-			
-			// Connect to the server
-			_serverConnection = new NetConnection();
-			_serverConnection.addEventListener( NetStatusEvent.NET_STATUS, onConnectionStatus );
-			_serverConnection.connect( SERVER_URL );
 		}
 		
 		public function record( recordId:String ):void
@@ -124,6 +136,14 @@ package
 				return;
 			}
 			
+			// If there is a playback in progress, we stop it and connect the preview video to the webcam
+			if( _playStream )
+			{
+				log( 'info', 'record - Stopped playback to record' );
+				stopPlayStream();
+				setUpRecording();
+			}
+			
 			_currentRecordId = recordId;
 			startPublishStream( recordId, false );
 		}
@@ -131,7 +151,16 @@ package
 		/** Stop the current recording without the possibility to resume it. */
 		public function stopRecording():void
 		{
-			stopPublishStream();
+			if( !_publishStream && !_currentRecordId )
+			{
+				log( 'error', 'stopRecording - No recording started!' );
+				return;
+			}
+			
+			if( _publishStream )
+				stopPublishStream();
+			
+			_previousRecordId = _currentRecordId;
 			_currentRecordId = null;
 		}
 		
@@ -142,6 +171,12 @@ package
 		 */
 		public function pauseRecording():void
 		{
+			if( !_publishStream )
+			{
+				log( 'error', 'pauseRecording - Not recording!' );
+				return;
+			}
+			
 			stopPublishStream();
 		}
 		
@@ -161,9 +196,34 @@ package
 			startPublishStream( _currentRecordId, true );
 		}
 		
+		/**
+		 * Play the previous recording. You have to call <code>stopRecording()</code>
+		 * before being able to call <code>play()</code>.
+		 * 
+		 * @see #stopRecording()
+		 */
 		public function play():void
 		{
-			return;
+			// If we already started playing, we just resume
+			if( _playStream )
+			{
+				_playStream.resume();
+				return;
+			}
+			
+			if( _publishStream )
+			{
+				log( 'error', 'play - Currently recording. You have to call stopRecording() before play().' );
+				return;
+			}
+			
+			if( !_previousRecordId )
+			{
+				log( 'error', 'play - Nothing recorded yet. You have to call stopRecording() before play().' );
+				return;
+			}
+			
+			startPlayStream( _previousRecordId );
 		}
 		
 		public function seek( time:Number ):void
@@ -171,9 +231,16 @@ package
 			return;
 		}
 		
+		/** Pause the current playback */
 		public function pausePlaying():void
 		{
-			return;
+			if( !_playStream )
+			{
+				log( 'error', 'pausePlaying - Not playing anything!' );
+				return;
+			}
+			
+			_playStream.pause();
 		}
 		
 		
@@ -184,7 +251,7 @@ package
 		//------------------------------------//
 		
 		/** Set up the JS API */
-		private function setUpJSApi( event:Event = null ):void
+		private function setUpJSApi():void
 		{
 			if( !ExternalInterface.available )
 			{
@@ -231,13 +298,13 @@ package
 		}
 		
 		/**
-		 * Listen to the server connection status. Set up the recording
-		 * device if the connection was successful.
+		 * Listen to the server connection status. Set up the JS API
+		 * if the connection was successful.
 		 */
 		private function onConnectionStatus( event:NetStatusEvent ):void
 		{
 			if( event.info.code == "NetConnection.Connect.Success" )
-				setUpRecording();
+				setUpJSApi();
 			else if( event.info.code == "NetConnection.Connect.Failed" || event.info.code == "NetConnection.Connect.Rejected" )
 				log( 'error', 'Connection error: ' + event.info.description );
 		}
@@ -248,23 +315,24 @@ package
 			// Video (if necessary)
 			if( _recordingMode == VIDEO )
 			{
-				_webcam = Camera.getCamera();
-				_webcam.setMode( VIDEO_WIDTH, VIDEO_HEIGHT, 30, false );
-				_webcam.setQuality( 0, 88 );
-				_webcam.setKeyFrameInterval( 30 );
+				if( !_webcam )
+				{
+					_webcam = Camera.getCamera();
+					_webcam.setMode( VIDEO_WIDTH, VIDEO_HEIGHT, 30, false );
+					_webcam.setQuality( 0, 88 );
+					_webcam.setKeyFrameInterval( 30 );
+				}
 				
-				videoPreview = new Video( VIDEO_WIDTH, VIDEO_HEIGHT );
-				videoPreview.attachCamera( _webcam );
-				FlexGlobals.topLevelApplication.stage.addChild( videoPreview );
+				_videoPreview.attachNetStream( null );
+				_videoPreview.attachCamera( _webcam );
 			}
 			
 			// Audio
-			_microphone = Microphone.getMicrophone();
-			_microphone.rate = 11;
-			
-			// Stream
-			_publishStream = new NetStream( _serverConnection );
-			_publishStream.client = {};
+			if( !_microphone )
+			{
+				_microphone = Microphone.getMicrophone();
+				_microphone.rate = 11;
+			}
 		}
 		
 		/**
@@ -275,6 +343,10 @@ package
 		 */
 		private function startPublishStream( recordId:String, append:Boolean ):void
 		{
+			// Set up the publish stream
+			_publishStream = new NetStream( _serverConnection );
+			_publishStream.client = {};
+			
 			// Start the recording
 			_publishStream.publish( recordId, append?"append":"record" );
 			
@@ -315,6 +387,40 @@ package
 		private function doStopPublishStream():void
 		{
 			_publishStream.publish( null );
+			_publishStream = null;
+		}
+		
+		/** Stop the play stream */
+		private function stopPlayStream():void
+		{
+			_playStream.pause();
+			_playStream = null;
+		}
+		
+		/**
+		 * Start the play stream.
+		 * 
+		 * @param playId String: The name of the file to play.
+		 */
+		private function startPlayStream( playId:String ):void
+		{
+			// Set up the play stream
+			_playStream = new NetStream( _serverConnection );
+			_playStream.client = {};
+			_playStream.bufferTime = 2;
+			
+			// Replace the webcam preview by the stream playback
+			setUpPlaying();
+			
+			// Start the playback
+			_playStream.play( _previousRecordId );
+		}
+		
+		/** Set up the player */
+		private function setUpPlaying():void
+		{
+			_videoPreview.attachCamera( null );
+			_videoPreview.attachNetStream( _playStream );
 		}
 	}
 }
