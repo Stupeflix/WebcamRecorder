@@ -3,6 +3,7 @@ package
 	import flash.events.Event;
 	import flash.events.EventDispatcher;
 	import flash.events.NetStatusEvent;
+	import flash.events.TimerEvent;
 	import flash.external.ExternalInterface;
 	import flash.media.Camera;
 	import flash.media.Microphone;
@@ -10,6 +11,7 @@ package
 	import flash.net.NetConnection;
 	import flash.net.NetStream;
 	import flash.system.Security;
+	import flash.utils.Timer;
 	import flash.utils.clearTimeout;
 	import flash.utils.setTimeout;
 	
@@ -44,11 +46,23 @@ package
 		/** Type of the notification dispatched when a recording starts */
 		public static const STARTED_RECORDING : String = "StartedRecording";
 		
+		/** Type of the notification dispatched when a recording pauses */
+		public static const PAUSED_RECORDING : String = "PausedRecording";
+		
+		/** Type of the notification dispatched when a recording stops */
+		public static const STOPPED_RECORDING : String = "StoppedRecording";
+		
+		/** Type of the notification dispatched periodically while recording */
+		public static const RECORDING_TIME : String = "RecordingTime";
+		
 		/** Type of the notification dispatched when a playback starts */
 		public static const STARTED_PLAYING : String = "StartedPlaying";
 		
 		/** Type of the notification dispatched when a playback pauses */
 		public static const PAUSED_PLAYING : String = "PausedPlaying";
+		
+		/** Type of the notification dispatched periodically while playing */
+		public static const PLAYED_TIME : String = "PlayedTime";
 		
 		/** The Wowza server URL */
 		private static const SERVER_URL : String = "rtmp://localhost/WebcamRecorder";
@@ -68,8 +82,7 @@ package
 		
 		private var _recordingMode : String;
 		private var _serverConnection : NetConnection;
-		private var _jsListener : String;
-		private var _notificationTimer : uint;
+		private var _jsListener : String;		
 		private var _videoPreview : Video;
 		private var _webcam : Camera;
 		private var _microphone : Microphone;
@@ -77,7 +90,10 @@ package
 		private var _playStream : NetStream;
 		private var _currentRecordId : String;
 		private var _previousRecordId : String;
-		private var _flushBufferTimer : uint;
+		private var _notificationTimer : Timer;
+		private var _recordingTimer : Timer;
+		private var _playingTimer : Timer;
+		private var _flushBufferTimer : Timer;
 		
 		
 		
@@ -133,6 +149,10 @@ package
 			}
 			setUpRecording();
 			
+			// Set up the timers
+			_recordingTimer = new Timer( 1000 );
+			_playingTimer = new Timer( 1000 );
+			
 			// Set up the JS notifications
 			setUpJSNotifications( jsListener, notificationFrequency );
 		}
@@ -174,11 +194,19 @@ package
 				return;
 			}
 			
+			// Stop the publish stream if necessary
 			if( _publishStream )
 				stopPublishStream();
 			
+			// Memorize the recordId
 			_previousRecordId = _currentRecordId;
 			_currentRecordId = null;
+			
+			// Dispatch a notification
+			notify( STOPPED_RECORDING, { time: _recordingTimer.currentCount } );
+			
+			// Reset the recording time
+			_recordingTimer.reset();
 		}
 		
 		/**
@@ -194,7 +222,11 @@ package
 				return;
 			}
 			
+			// Stop the publish stream
 			stopPublishStream();
+			
+			// Dispatch a notification
+			notify( PAUSED_RECORDING, { time: _recordingTimer.currentCount } );
 		}
 		
 		/**
@@ -289,6 +321,10 @@ package
 			
 			// Dispatch a notification
 			notify( PAUSED_PLAYING );
+			
+			// Stop incrementing the played time and dispatching notifications
+			_notificationTimer.removeEventListener( TimerEvent.TIMER, notifyPlayedTime );
+			_playingTimer.stop();
 		}
 		
 		
@@ -338,12 +374,13 @@ package
 			if( !( notificationFrequency >= 0 ) )
 				log( 'warn', 'init - notificationFrequency has to be greater or equal to zero! We won\' notify for this session.' );
 			
-			if( notificationFrequency == 0 )
-				return;
-			
 			// Set up the notifications
 			_jsListener = jsListener;
-			_notificationTimer = setTimeout( notify, (1/notificationFrequency)*1000 );
+			if( notificationFrequency > 0 )
+			{
+				_notificationTimer = new Timer( (1/notificationFrequency)*1000 );
+				_notificationTimer.start();
+			}
 		}
 		
 		/** Set up the recording device(s) (webcam and/or microphone) */
@@ -396,6 +433,18 @@ package
 			ExternalInterface.call( _jsListener, type, arguments );
 		}
 		
+		/** Notify of the recording time */
+		private function notifyRecordingTime( event:Event ):void
+		{
+			notify( RECORDING_TIME, { time: _recordingTimer.currentCount } );
+		}
+		
+		/** Notify of the played time */
+		private function notifyPlayedTime( event:Event ):void
+		{
+			notify( PLAYED_TIME, { time: _playingTimer.currentCount } );
+		}
+		
 		/**
 		 * Start the publish stream.
 		 * 
@@ -417,6 +466,10 @@ package
 			
 			// Set the buffer
 			_publishStream.bufferTime = 20;
+			
+			// Start incrementing the recording time and dispatching notifications
+			_recordingTimer.start();
+			_notificationTimer.addEventListener( TimerEvent.TIMER, notifyRecordingTime );
 		}
 		
 		/** Stop the publish stream or monitor the buffer size */
@@ -430,17 +483,30 @@ package
 			if( _publishStream.bufferLength == 0 )
 				doStopPublishStream();
 			else
-				_flushBufferTimer = setTimeout( checkBufferLength, 250 );
+			{
+				_flushBufferTimer = new Timer( 250 );
+				_flushBufferTimer.addEventListener( TimerEvent.TIMER, checkBufferLength );
+				_flushBufferTimer.start();
+			}
+			
+			// Stop incrementing the recording time and dispatching notifications
+			_notificationTimer.removeEventListener( TimerEvent.TIMER, notifyRecordingTime );
+			_recordingTimer.stop();
 		}
 		
 		/** Check the buffer length and stop the publish stream if empty */
-		private function checkBufferLength():void
+		private function checkBufferLength( event:Event ):void
 		{
+			// Do nothing if the buffer is still not empty
 			if( _publishStream.bufferLength > 0 )
 				return;
 			
-			clearTimeout( _flushBufferTimer );
-			_flushBufferTimer = 0;
+			// If the buffer is empty, destroy the timer
+			_flushBufferTimer.removeEventListener( TimerEvent.TIMER, checkBufferLength );
+			_flushBufferTimer.stop();
+			_flushBufferTimer = null;
+			
+			// Then actually stop the publish stream
 			doStopPublishStream();
 		}
 		
@@ -475,6 +541,10 @@ package
 			
 			// Start the playback
 			_playStream.play( _previousRecordId );
+			
+			// Start incrementing the played time and dispatching notifications
+			_playingTimer.start();
+			_notificationTimer.addEventListener( TimerEvent.TIMER, notifyPlayedTime );
 		}
 		
 		/** Stop the play stream */
