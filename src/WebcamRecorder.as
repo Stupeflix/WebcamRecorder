@@ -61,6 +61,9 @@ package
 		/** Type of the notification dispatched when a playback pauses */
 		public static const PAUSED_PLAYING : String = "PausedPlaying";
 		
+		/** Type of the notification dispatched when a playback ends */
+		public static const END_PLAYING : String = "EndPlaying";
+		
 		/** Type of the notification dispatched periodically while playing */
 		public static const PLAYED_TIME : String = "PlayedTime";
 		
@@ -253,11 +256,13 @@ package
 		 */
 		public function play():void
 		{
-			// If we already started playing, we just resume and dispatch a notification
+			// If we already started playing, we just resume, dispatch a notification and restore scheduled notifications
 			if( _playStream )
 			{
 				_playStream.resume();
 				notify( STARTED_PLAYING );
+				_notificationTimer.addEventListener( TimerEvent.TIMER, notifyPlayedTime );
+				_playingTimer.start();
 				return;
 			}
 			
@@ -294,18 +299,6 @@ package
 			}
 			
 			_playStream.seek( time );
-		}
-		
-		/** Stop the current playbock */
-		public function stopPlaying():void
-		{
-			if( !_playStream )
-			{
-				log( 'error', 'stopPlaying - Not playing anything!' );
-				return;
-			}
-			
-			stopPlayStream();
 		}
 		
 		/** Pause the current playback */
@@ -517,6 +510,21 @@ package
 			_publishStream = null;
 		}
 		
+		/** Stop the playback and go back to the webcam preview when the playback ends */
+		private function onPlaybackEnd():void
+		{
+			// Dispatch a notification
+			notify( END_PLAYING, { time: _playingTimer.currentCount } );
+			
+			// Reset the playing timer and stop scheduled notifications
+			_notificationTimer.removeEventListener( TimerEvent.TIMER, notifyPlayedTime );
+			_playingTimer.stop();
+			_playingTimer.reset();
+			
+			// Stop playing stream
+			stopPlayStream();
+		}
+		
 		/**
 		 * Start the play stream.
 		 * 
@@ -532,11 +540,11 @@ package
 			// Replace the webcam preview by the stream playback
 			setUpPlaying();
 			
-			// Add an event listener to go back to the webcam preview when the playing is finished
+			// Add an event listener to dispatch a notification and go back to the webcam preview when the playing is finished
 			_playStream.client.onPlayStatus = function( info:Object ):void
 			{
 				if( info.code == "NetStream.Play.Complete" )
-					stopPlayStream();
+					onPlaybackEnd();
 			}
 			
 			// Start the playback
