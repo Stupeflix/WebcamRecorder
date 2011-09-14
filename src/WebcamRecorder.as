@@ -12,8 +12,6 @@ package
 	import flash.net.NetStream;
 	import flash.system.Security;
 	import flash.utils.Timer;
-	import flash.utils.clearTimeout;
-	import flash.utils.setTimeout;
 	
 	import mx.core.FlexGlobals;
 
@@ -145,11 +143,8 @@ package
 			
 			// Set up the recording
 			_recordingMode = recordingMode;
-			if( recordingMode == VIDEO )
-			{
-				_videoPreview = new Video( VIDEO_WIDTH, VIDEO_HEIGHT );
-				FlexGlobals.topLevelApplication.stage.addChild( _videoPreview );
-			}
+			_videoPreview = new Video( VIDEO_WIDTH, VIDEO_HEIGHT );
+			FlexGlobals.topLevelApplication.stage.addChild( _videoPreview );
 			setUpRecording();
 			
 			// Set up the timers
@@ -399,6 +394,11 @@ package
 			{
 				_microphone = Microphone.getMicrophone();
 				_microphone.rate = 11;
+				
+				// Just to trigger the security window when initializing the component in audio mode
+				var testStream : NetStream = new NetStream( _serverConnection );
+				testStream.attachAudio( _microphone );
+				testStream.attachAudio( null );
 			}
 		}
 		
@@ -490,6 +490,7 @@ package
 		/** Check the buffer length and stop the publish stream if empty */
 		private function checkBufferLength( event:Event ):void
 		{
+			log('debug', 'check buffer length');
 			// Do nothing if the buffer is still not empty
 			if( _publishStream.bufferLength > 0 )
 				return;
