@@ -31,7 +31,7 @@ package
 	{
 		//------------------------------------//
 		//									  //
-		//				CONSTS				  //
+		//			CONSTS / CONFIG			  //
 		//									  //
 		//------------------------------------//
 		
@@ -40,6 +40,22 @@ package
 		
 		/** Recording mode using the microphone to record audio */
 		public static const AUDIO : String = "audio";
+		
+		/** Video framerate */
+		private static const DEFAULT_FRAMERATE : uint = 30;
+		
+		/** Video width (in pixels) */
+		private static const VIDEO_WIDTH : uint = 160;
+		
+		/** Video height (in pixels) */
+		private static const VIDEO_HEIGHT : uint = 120;
+		
+		
+		//------------------------------------//
+		//									  //
+		//		CONSTS / NOTIFICATIONS		  //
+		//									  //
+		//------------------------------------//
 		
 		/** Type of the notification dispatched when a recording starts */
 		public static const STARTED_RECORDING : String = "StartedRecording";
@@ -65,12 +81,6 @@ package
 		/** Type of the notification dispatched periodically while playing */
 		public static const PLAYED_TIME : String = "PlayedTime";
 		
-		/** Video width (in pixels) */
-		private static const VIDEO_WIDTH : uint = 160;
-		
-		/** Video height (in pixels) */
-		private static const VIDEO_HEIGHT : uint = 120;
-		
 		
 		//------------------------------------//
 		//									  //
@@ -80,7 +90,8 @@ package
 		
 		private var _recordingMode : String;
 		private var _serverConnection : NetConnection;
-		private var _jsListener : String;		
+		private var _jsListener : String;
+		private var _framerate : uint;
 		private var _videoPreview : Video;
 		private var _webcam : Camera;
 		private var _microphone : Microphone;
@@ -115,13 +126,39 @@ package
 		 * @param recordingMode String: Can be either WebcamRecorder.VIDEO or WebcamRecorder.AUDIO.
 		 * Note that WebcamRecorder.VIDEO includes audio recording if a microphone is available.
 		 * 
-		 * @param jsListener String: The name of a Javascript listener function able to handle our
-		 * notifications. It has to conform to the following API: TO DO.
+		 * @param options Object (optional): An object defining custom values for one or more of the following
+		 * options:
 		 * 
-		 * @param notificationFrequency Number: The frequency at which the recorder will send notifications
-		 * to the JS listener (in Hz).
+		 * <table>
+		 * 		<tr>
+		 * 			<th>Key</th>
+		 * 			<th>Value type</th>
+		 * 			<th>Default value</th>
+		 * 			<th>Description</th>
+		 * 		</tr>
+		 * 		<tr>
+		 * 			<td>jsListener</td>
+		 * 			<td>String</td>
+		 * 			<td>null</td>
+		 * 			<td>The name of a Javascript listener function able to handle our
+		 * notifications.</td>
+		 * 		</tr>
+		 * 		<tr>
+		 * 			<td>notificationFrequency</td>
+		 * 			<td>Number</td>
+		 * 			<td>0</td>
+		 * 			<td>The frequency at which the recorder will send notifications
+		 * to the JS listener (in Hz).</td>
+		 * 		</tr>
+		 * 		<tr>
+		 * 			<td>framerate</td>
+		 * 			<td>uint</td>
+		 * 			<td>30</td>
+		 * 			<td>The video framerate.</td>
+		 * 		</tr>
+		 * </table>
 		 */
-		public function init( serverUrl:String, recordingMode:String, jsListener:String, notificationFrequency:Number ):void
+		public function init( serverUrl:String, recordingMode:String, options:Object = null ):void
 		{
 			// We need a server URL
 			if( !serverUrl )
@@ -149,8 +186,13 @@ package
 			_serverConnection.addEventListener( NetStatusEvent.NET_STATUS, onConnectionStatus );
 			_serverConnection.connect( serverUrl );
 			
-			// Set up the recording mode and video preview
+			// Set up the config
 			_recordingMode = recordingMode;
+			_framerate = DEFAULT_FRAMERATE;
+			if( options && options.hasOwnProperty('framerate') && options.framerate > 0 )
+				_framerate = options.framerate;
+			
+			// Add the video preview
 			_videoPreview = new Video( VIDEO_WIDTH, VIDEO_HEIGHT );
 			FlexGlobals.topLevelApplication.stage.addChild( _videoPreview );
 			
@@ -159,7 +201,8 @@ package
 			_playingTimer = new Timer( 1000 );
 			
 			// Set up the JS notifications
-			setUpJSNotifications( jsListener, notificationFrequency );
+			if( options && options.hasOwnProperty('jsListener') && options.hasOwnProperty('notificationFrequency') )
+				setUpJSNotifications( options.jsListener, options.notificationFrequency );
 		}
 		
 		public function record( recordId:String ):void
@@ -387,9 +430,9 @@ package
 				if( !_webcam )
 				{
 					_webcam = Camera.getCamera();
-					_webcam.setMode( VIDEO_WIDTH, VIDEO_HEIGHT, 30, false );
+					_webcam.setMode( VIDEO_WIDTH, VIDEO_HEIGHT, _framerate, false );
 					_webcam.setQuality( 0, 88 );
-					_webcam.setKeyFrameInterval( 30 );
+					_webcam.setKeyFrameInterval( _framerate );
 				}
 				
 				_videoPreview.attachNetStream( null );
