@@ -44,6 +44,9 @@ package
 		/** Video framerate */
 		private static const DEFAULT_FRAMERATE : uint = 30;
 		
+		/** Audio rate */
+		private static const DEFAULT_AUDIORATE : uint = 11;
+		
 		/** Video width (in pixels) */
 		private static const VIDEO_WIDTH : uint = 160;
 		
@@ -92,6 +95,7 @@ package
 		private var _serverConnection : NetConnection;
 		private var _jsListener : String;
 		private var _framerate : uint;
+		private var _audiorate : uint;
 		private var _videoPreview : Video;
 		private var _webcam : Camera;
 		private var _microphone : Microphone;
@@ -156,6 +160,12 @@ package
 		 * 			<td>30</td>
 		 * 			<td>The video framerate.</td>
 		 * 		</tr>
+		 * 		<tr>
+		 * 			<td>audiorate</td>
+		 * 			<td>uint</td>
+		 * 			<td>11</td>
+		 * 			<td>The microphone audio rate.</td>
+		 * 		</tr>
 		 * </table>
 		 */
 		public function init( serverUrl:String, recordingMode:String, options:Object = null ):void
@@ -189,8 +199,11 @@ package
 			// Set up the config
 			_recordingMode = recordingMode;
 			_framerate = DEFAULT_FRAMERATE;
+			_audiorate = DEFAULT_AUDIORATE;
 			if( options && options.hasOwnProperty('framerate') && options.framerate > 0 )
 				_framerate = options.framerate;
+			if( options && options.hasOwnProperty('audiorate') && options.audiorate > 0 )
+				_audiorate = options.audiorate;
 			
 			// Add the video preview
 			_videoPreview = new Video( VIDEO_WIDTH, VIDEO_HEIGHT );
@@ -443,7 +456,7 @@ package
 			if( !_microphone )
 			{
 				_microphone = Microphone.getMicrophone();
-				_microphone.rate = 11;
+				_microphone.rate = _audiorate;
 				
 				// Just to trigger the security window when initializing the component in audio mode
 				var testStream : NetStream = new NetStream( _serverConnection );
