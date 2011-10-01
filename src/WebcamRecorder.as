@@ -65,9 +65,6 @@ package
 		/** Type of the notification dispatched periodically while playing */
 		public static const PLAYED_TIME : String = "PlayedTime";
 		
-		/** The Wowza server URL */
-		private static const SERVER_URL : String = "rtmp://localhost/WebcamRecorder";
-		
 		/** Video width (in pixels) */
 		private static const VIDEO_WIDTH : uint = 160;
 		
@@ -104,17 +101,16 @@ package
 		//									  //
 		//------------------------------------//
 		
-		/** Constructor: Try to connect to the server */
+		/** Constructor: Set up the JS API */
 		public function WebcamRecorder()
 		{
-			// Connect to the server
-			_serverConnection = new NetConnection();
-			_serverConnection.addEventListener( NetStatusEvent.NET_STATUS, onConnectionStatus );
-			_serverConnection.connect( SERVER_URL );
+			setUpJSApi();
 		}
 		
 		/**
 		 * Initialize the recorder.
+		 * 
+		 * @param serverUrl String: The Wowza server URL (eg: rtmp://localhost/WebcamRecorder).
 		 * 
 		 * @param recordingMode String: Can be either WebcamRecorder.VIDEO or WebcamRecorder.AUDIO.
 		 * Note that WebcamRecorder.VIDEO includes audio recording if a microphone is available.
@@ -125,8 +121,15 @@ package
 		 * @param notificationFrequency Number: The frequency at which the recorder will send notifications
 		 * to the JS listener (in Hz).
 		 */
-		public function init( recordingMode:String, jsListener:String, notificationFrequency:Number ):void
+		public function init( serverUrl:String, recordingMode:String, jsListener:String, notificationFrequency:Number ):void
 		{
+			// We need a server URL
+			if( !serverUrl )
+			{
+				log( 'error', 'init - You need to pass a server URL!' );
+				return;
+			}
+			
 			// The recorder can be initialized only once
 			if( _recordingMode )
 			{
@@ -141,11 +144,15 @@ package
 				return;
 			}
 			
-			// Set up the recording
+			// Connect to the server
+			_serverConnection = new NetConnection();
+			_serverConnection.addEventListener( NetStatusEvent.NET_STATUS, onConnectionStatus );
+			_serverConnection.connect( serverUrl );
+			
+			// Set up the recording mode and video preview
 			_recordingMode = recordingMode;
 			_videoPreview = new Video( VIDEO_WIDTH, VIDEO_HEIGHT );
 			FlexGlobals.topLevelApplication.stage.addChild( _videoPreview );
-			setUpRecording();
 			
 			// Set up the timers
 			_recordingTimer = new Timer( 1000 );
@@ -329,9 +336,9 @@ package
 		private function onConnectionStatus( event:NetStatusEvent ):void
 		{
 			if( event.info.code == "NetConnection.Connect.Success" )
-				setUpJSApi();
+				setUpRecording();
 			else if( event.info.code == "NetConnection.Connect.Failed" || event.info.code == "NetConnection.Connect.Rejected" )
-				log( 'error', 'Connection error: ' + event.info.description );
+				log( 'error', 'Couldn\'t connect to the server. Error: ' + event.info.description );
 		}
 		
 		/** Set up the JS API */
