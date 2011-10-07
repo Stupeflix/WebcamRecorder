@@ -27,7 +27,7 @@ package
 	 * @see flash.net.NetConnection
 	 * @see flash.net.NetStream
 	 */
-	public class WebcamRecorder extends EventDispatcher
+        public class WebcamRecorder extends EventDispatcher
 	{
 		//------------------------------------//
 		//									  //
@@ -48,10 +48,10 @@ package
 		private static const DEFAULT_AUDIORATE : uint = 11;
 		
 		/** Video width (in pixels) */
-		private static const VIDEO_WIDTH : uint = 160;
+		private static const DEFAULT_VIDEO_WIDTH : uint = 640;
 		
 		/** Video height (in pixels) */
-		private static const VIDEO_HEIGHT : uint = 120;
+		private static const DEFAULT_VIDEO_HEIGHT : uint = 360;
 		
 		
 		//------------------------------------//
@@ -96,6 +96,8 @@ package
 		private var _jsListener : String;
 		private var _framerate : uint;
 		private var _audiorate : uint;
+		private var _width : uint;
+		private var _height : uint;
 		private var _videoPreview : Video;
 		private var _webcam : Camera;
 		private var _microphone : Microphone;
@@ -166,6 +168,19 @@ package
 		 * 			<td>11</td>
 		 * 			<td>The microphone audio rate.</td>
 		 * 		</tr>
+		 * 		<tr>
+		 * 			<td>width</td>
+		 * 			<td>uint</td>
+		 * 			<td>640</td>
+		 * 			<td>The video width.</td>
+		 * 		</tr>
+		 * 		<tr>
+		 * 			<td>height</td>
+		 * 			<td>uint</td>
+		 * 			<td>360</td>
+		 * 			<td>The video height.</td>
+		 * 		</tr>
+		 * </table>
 		 * </table>
 		 */
 		public function init( serverUrl:String, recordingMode:String, options:Object = null ):void
@@ -200,13 +215,21 @@ package
 			_recordingMode = recordingMode;
 			_framerate = DEFAULT_FRAMERATE;
 			_audiorate = DEFAULT_AUDIORATE;
+			_width = DEFAULT_VIDEO_WIDTH;
+			_height = DEFAULT_VIDEO_HEIGHT;
+
 			if( options && options.hasOwnProperty('framerate') && options.framerate > 0 )
 				_framerate = options.framerate;
 			if( options && options.hasOwnProperty('audiorate') && options.audiorate > 0 )
 				_audiorate = options.audiorate;
+
+			if( options && options.hasOwnProperty('width') && options.width > 0 )
+				_width = options.width;
+			if( options && options.hasOwnProperty('height') && options.height > 0 )
+				_height = options.height;
 			
 			// Add the video preview
-			_videoPreview = new Video( VIDEO_WIDTH, VIDEO_HEIGHT );
+       		        _videoPreview = new Video(_width, _height);
 			FlexGlobals.topLevelApplication.stage.addChild( _videoPreview );
 			
 			// Set up the timers
@@ -443,7 +466,7 @@ package
 				if( !_webcam )
 				{
 					_webcam = Camera.getCamera();
-					_webcam.setMode( VIDEO_WIDTH, VIDEO_HEIGHT, _framerate, false );
+					_webcam.setMode(_width, _height, _framerate, false );
 					_webcam.setQuality( 0, 88 );
 					_webcam.setKeyFrameInterval( _framerate );
 				}
