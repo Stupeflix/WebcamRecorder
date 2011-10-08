@@ -2,7 +2,7 @@
 <s:Application xmlns:fx="http://ns.adobe.com/mxml/2009" 
 			   xmlns:s="library://ns.adobe.com/flex/spark" 
 			   xmlns:mx="library://ns.adobe.com/flex/mx"
-			   minWidth="160" minHeight="120"
+			   minWidth="640" minHeight="480"
 			   creationComplete="onCreationComplete(event)">
 	<fx:Script>
 		<![CDATA[

@@ -5,14 +5,14 @@
 	</head>
 	
 	<body>
-		<object id="recorder" width="100%" height="100%">
+		<object id="recorder" width="640" height="480">
 				<param name="movie" value="./WebcamRecorderApp.swf" />
 				<param name="quality" value="high" />
 				<param name="bgcolor" value="#ffffff" />
 				<param name="allowScriptAccess" value="sameDomain" />
 				<embed name="recorder" src="./WebcamRecorderApp.swf"
 					quality="high" bgcolor="#ffffff"
-					width="100%" height="100%" align="middle"
+					width="640" height="480" align="middle"
 					play="true"
 					loop="false"
 					quality="high"
@@ -29,6 +29,15 @@
 				console.debug( type );
 				console.debug( arguments );
 			}
+                        function start() {
+                         var options = new Object();
+                        options.jsListener = jsListener;
+                        options.width=640;
+                        options.height=360;
+                        options.fps = 25;
+                        recorder.init('rtmp://localhost/WebcamRecorder', 'video', options);
+                        }
+
 		</script>
 	</body>
 </html>

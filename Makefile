@@ -1,5 +1,7 @@
-#AMXMLC=/Users/lagunas/devel/stupeflix/website/website/imageupload/flex/bin/amxmlc
-AMXMLC=/Users/lagunas/devel/flex/flex_sdk_4.1.0.16076_mpl/bin/amxmlc
+MXMLC=mxmlc
 
 all:
-	${AMXMLC} src/WebcamRecorder.as -debug=true -incremental=true -benchmark=false -o bin-debug/WebcamRecorderApp.swf
+	${MXMLC} src/WebcamRecorderApp.mxml -debug=true -incremental=true -benchmark=false -static-link-runtime-shared-libraries=true -o bin-debug/WebcamRecorderApp.swf
+
+final:
+	${MXMLC} src/WebcamRecorderApp.mxml -static-link-runtime-shared-libraries=true -link-report externals.xml -o bin-debug/WebcamRecorderApp.swf
