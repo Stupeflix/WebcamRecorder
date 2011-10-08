@@ -12,7 +12,7 @@ package
 	import flash.net.NetStream;
 	import flash.system.Security;
 	import flash.utils.Timer;
-	
+        import flash.utils.Dictionary	
 	import mx.core.FlexGlobals;
 
 	/**
@@ -51,8 +51,13 @@ package
 		private static const DEFAULT_VIDEO_WIDTH : uint = 640;
 		
 		/** Video height (in pixels) */
-		private static const DEFAULT_VIDEO_HEIGHT : uint = 360;
-		
+		private static const DEFAULT_VIDEO_HEIGHT : uint = 480;
+
+		/** Video quality (0-100) */
+		private static const DEFAULT_VIDEO_QUALITY : uint = 88;		
+
+   	        /** Video max bandwidth, in bytes per second */
+		private static const DEFAULT_VIDEO_BANDWIDTH : uint = 0;		
 		
 		//------------------------------------//
 		//									  //
@@ -98,6 +103,8 @@ package
 		private var _audiorate : uint;
 		private var _width : uint;
 		private var _height : uint;
+		private var _quality : uint;
+		private var _bandwidth : uint;
 		private var _videoPreview : Video;
 		private var _webcam : Camera;
 		private var _microphone : Microphone;
@@ -180,6 +187,18 @@ package
 		 * 			<td>360</td>
 		 * 			<td>The video height.</td>
 		 * 		</tr>
+		 * 		<tr>
+		 * 			<td>quality</td>
+		 * 			<td>uint</td>
+		 * 			<td>88</td>
+		 * 			<td>The video quality.</td>
+		 * 		</tr>
+		 * 		<tr>
+		 * 			<td>bandwidth</td>
+		 * 			<td>uint</td>
+		 * 			<td>0</td>
+		 * 			<td>The video max bandwidth (default is infinite).</td>
+		 * 		</tr>
 		 * </table>
 		 * </table>
 		 */
@@ -217,6 +236,8 @@ package
 			_audiorate = DEFAULT_AUDIORATE;
 			_width = DEFAULT_VIDEO_WIDTH;
 			_height = DEFAULT_VIDEO_HEIGHT;
+			_quality = DEFAULT_VIDEO_QUALITY;
+        		_bandwidth = DEFAULT_VIDEO_BANDWIDTH;
 
 			if( options && options.hasOwnProperty('framerate') && options.framerate > 0 )
 				_framerate = options.framerate;
@@ -227,6 +248,10 @@ package
 				_width = options.width;
 			if( options && options.hasOwnProperty('height') && options.height > 0 )
 				_height = options.height;
+			if( options && options.hasOwnProperty('quality') && options.quality > 0 )
+				_quality = options.quality;
+			if( options && options.hasOwnProperty('bandwidth') && options.bandwidth > 0 )
+				_bandwidth = options.bandwidth;
 			
 			// Add the video preview
        		        _videoPreview = new Video(_width, _height);
@@ -401,6 +426,25 @@ package
 			_playingTimer.stop();
 		}
 		
+
+                private function detectHighestResolution(width:int, height:int, framerate:int, favorArea:Boolean):Dictionary
+		{
+		    var webcam:Camera = Camera.getCamera();
+		    webcam.setMode(width, height, framerate, favorArea);
+
+                    var dict:Dictionary = new Dictionary();
+                    dict["width"] = webcam.width;
+                    dict["height"] = webcam.height;
+                    dict["framerate"] = webcam.fps;
+
+                    return dict;
+                }
+
+		/** Set up the player */
+		private function currentFPS():int
+		{
+                    return _webcam.currentFPS;
+		}
 		
 		//------------------------------------//
 		//									  //
@@ -438,6 +482,8 @@ package
 			ExternalInterface.addCallback( 'play', play );
 			ExternalInterface.addCallback( 'seek', seek );
 			ExternalInterface.addCallback( 'pausePlaying', pausePlaying );
+			ExternalInterface.addCallback( 'detectHighestResolution', detectHighestResolution );
+			ExternalInterface.addCallback( 'currentFPS', currentFPS);
 			log( 'info', 'JS API initialized' );
 		}
 		
@@ -456,6 +502,7 @@ package
 				_notificationTimer.start();
 			}
 		}
+
 		
 		/** Set up the recording device(s) (webcam and/or microphone) */
 		private function setUpRecording():void
@@ -467,7 +514,7 @@ package
 				{
 					_webcam = Camera.getCamera();
 					_webcam.setMode(_width, _height, _framerate, false );
-					_webcam.setQuality( 0, 88 );
+					_webcam.setQuality(_bandwidth, _quality );
 					_webcam.setKeyFrameInterval( _framerate );
 				}
 				
