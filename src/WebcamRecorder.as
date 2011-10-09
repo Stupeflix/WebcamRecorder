@@ -45,7 +45,7 @@ package
 		private static const DEFAULT_FRAMERATE : uint = 30;
 		
 		/** Audio rate */
-		private static const DEFAULT_AUDIORATE : uint = 11;
+		private static const DEFAULT_AUDIORATE : uint = 44;
 		
 		/** Video width (in pixels) */
 		private static const DEFAULT_VIDEO_WIDTH : uint = 640;
