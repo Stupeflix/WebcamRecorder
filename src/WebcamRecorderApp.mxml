@@ -2,13 +2,14 @@
 <s:Application xmlns:fx="http://ns.adobe.com/mxml/2009" 
 			   xmlns:s="library://ns.adobe.com/flex/spark" 
 			   xmlns:mx="library://ns.adobe.com/flex/mx"
-			   minWidth="640" minHeight="480"
-			   creationComplete="onCreationComplete(event)">
+			   minWidth="16" minHeight="12"
+                           applicationComplete="onApplicationComplete(event);">
 	<fx:Script>
 		<![CDATA[
 			import mx.events.FlexEvent;
 			
-			protected function onCreationComplete(event:FlexEvent):void
+
+                 	protected function onApplicationComplete(event:FlexEvent):void
 			{
 				var recorder : WebcamRecorder = new WebcamRecorder();
 			}

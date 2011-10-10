@@ -5,38 +5,30 @@
 	</head>
 	
 	<body>
-		<object id="recorder" width="640" height="480">
+		<object id="recorder" width="640" height="360">
 				<param name="movie" value="./WebcamRecorderApp.swf" />
 				<param name="quality" value="high" />
 				<param name="bgcolor" value="#ffffff" />
 				<param name="allowScriptAccess" value="sameDomain" />
+                                <param name ="flashVars" value="recordingMode=video&serverURL=rtmp://localhost/WebcamRecorder&jsListener=jsListener" />
 				<embed name="recorder" src="./WebcamRecorderApp.swf"
 					quality="high" bgcolor="#ffffff"
-					width="640" height="480" align="middle"
+					width="640" height="360" align="middle"
 					play="true"
 					loop="false"
 					quality="high"
 					allowScriptAccess="always"
 					type="application/x-shockwave-flash"
+                                        flashVars="recordingMode=video&serverURL=rtmp://localhost/WebcamRecorder&jsListener=jsListener"
 					pluginspage="http://www.adobe.com/go/getflashplayer">
 				</embed>
 		</object>
 		
 		<script type="text/javascript">
-			var recorder = document['recorder'];
 			
 			function jsListener( type, arguments ) {
-				console.debug( type );
-				console.debug( arguments );
+				console.debug( type + ":" + arguments );
 			}
-                        function start() {
-                         var options = new Object();
-                        options.jsListener = jsListener;
-                        options.width=640;
-                        options.height=360;
-                        options.fps = 25;
-                        recorder.init('rtmp://localhost/WebcamRecorder', 'video', options);
-                        }
 
 		</script>
 	</body>

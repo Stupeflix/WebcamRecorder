@@ -1,6 +1,7 @@
 package
 {
 	import flash.events.Event;
+        import flash.events.IOErrorEvent;
 	import flash.events.EventDispatcher;
 	import flash.events.NetStatusEvent;
 	import flash.events.TimerEvent;
@@ -12,8 +13,16 @@ package
 	import flash.net.NetStream;
 	import flash.system.Security;
 	import flash.utils.Timer;
-        import flash.utils.Dictionary	
+	import flash.utils.Dictionary;
 	import mx.core.FlexGlobals;
+	import flash.display.Bitmap;
+	import flash.display.BitmapData;
+	import com.adobe.images.JPGEncoder;
+	import flash.utils.ByteArray;
+	import flash.net.URLRequestHeader;
+	import flash.net.URLRequestMethod;
+	import flash.net.URLRequest;
+	import flash.net.URLLoader;
 
 	/**
 	 * WebcamRecorder uses the user's webcam and/or microphone to record
@@ -40,6 +49,9 @@ package
 		
 		/** Recording mode using the microphone to record audio */
 		public static const AUDIO : String = "audio";
+
+		/** Recording mode */
+		private static const DEFAULT_RECORDING_MODE : String = VIDEO;
 		
 		/** Video framerate */
 		private static const DEFAULT_FRAMERATE : uint = 30;
@@ -51,19 +63,25 @@ package
 		private static const DEFAULT_VIDEO_WIDTH : uint = 640;
 		
 		/** Video height (in pixels) */
-		private static const DEFAULT_VIDEO_HEIGHT : uint = 480;
+		private static const DEFAULT_VIDEO_HEIGHT : uint = 360;
 
 		/** Video quality (0-100) */
 		private static const DEFAULT_VIDEO_QUALITY : uint = 88;		
 
    	        /** Video max bandwidth, in bytes per second */
 		private static const DEFAULT_VIDEO_BANDWIDTH : uint = 0;		
+
+   	        /** Default notification frequency : default is  */
+		private static const DEFAULT_NOTIFICATION_FREQUENCY : uint = 0;		
 		
 		//------------------------------------//
 		//									  //
 		//		CONSTS / NOTIFICATIONS		  //
 		//									  //
 		//------------------------------------//
+
+		/** Type of the notification dispatched when the object is initialized */
+		public static const READY : String = "Ready";
 		
 		/** Type of the notification dispatched when a recording starts */
 		public static const STARTED_RECORDING : String = "StartedRecording";
@@ -88,7 +106,12 @@ package
 		
 		/** Type of the notification dispatched periodically while playing */
 		public static const PLAYED_TIME : String = "PlayedTime";
-		
+
+		/** Type of the notification dispatched when a still image is successfully sent */
+		public static const STILL_SENT : String = "StillSent";
+		/** Type of the notification dispatched when a still image is not successfully sent */
+		public static const STILL_SEND_ERROR : String = "StillSendError";
+                		
 		
 		//------------------------------------//
 		//									  //
@@ -97,6 +120,7 @@ package
 		//------------------------------------//
 		
 		private var _recordingMode : String;
+		private var _serverURL : String;
 		private var _serverConnection : NetConnection;
 		private var _jsListener : String;
 		private var _framerate : uint;
@@ -112,6 +136,7 @@ package
 		private var _playStream : NetStream;
 		private var _currentRecordId : String;
 		private var _previousRecordId : String;
+		private var _notificationFrequency : uint;
 		private var _notificationTimer : Timer;
 		private var _recordingTimer : Timer;
 		private var _playingTimer : Timer;
@@ -125,14 +150,7 @@ package
 		//									  //
 		//------------------------------------//
 		
-		/** Constructor: Set up the JS API */
-		public function WebcamRecorder()
-		{
-			setUpJSApi();
-		}
-		
-		/**
-		 * Initialize the recorder.
+		/** Constructor: Set up the JS API and read flash vars
 		 * 
 		 * @param serverUrl String: The Wowza server URL (eg: rtmp://localhost/WebcamRecorder).
 		 * 
@@ -148,6 +166,19 @@ package
 		 * 			<th>Value type</th>
 		 * 			<th>Default value</th>
 		 * 			<th>Description</th>
+		 * 		</tr>
+		 * 		<tr>
+		 * 			<td>serverURL</td>
+		 * 			<td>String</td>
+		 * 			<td>null</td>
+		 * 			<td>The recording server: should look like 'rtmp://localhost/WebcamRecorder' </td>
+		 * 		</tr>
+		 * 		<tr>
+		 * 			<td>recordingMode</td>
+		 * 			<td>String</td>
+		 * 			<td>video</td>
+		 * 			<td>The recording mode. Can be either WebcamRecorder.VIDEO or WebcamRecorder.AUDIO.
+		 * Note that WebcamRecorder.VIDEO includes audio recording if a microphone is available.</td>
 		 * 		</tr>
 		 * 		<tr>
 		 * 			<td>jsListener</td>
@@ -202,57 +233,33 @@ package
 		 * </table>
 		 * </table>
 		 */
-		public function init( serverUrl:String, recordingMode:String, options:Object = null ):void
+
+		public function WebcamRecorder()
 		{
-			// We need a server URL
-			if( !serverUrl )
-			{
-				log( 'error', 'init - You need to pass a server URL!' );
-				return;
-			}
-			
-			// The recorder can be initialized only once
-			if( _recordingMode )
-			{
-				log( 'error', 'init - Recorder already initialized!' );
-				return;
-			}
-			
-			// Check the recording mode
-			if( !( recordingMode == VIDEO || recordingMode == AUDIO ) )
-			{
-				log( 'error', 'init - recordingMode should be either ' + VIDEO + ' or ' + AUDIO + '(given: ' + recordingMode + ')' );
-				return;
-			}
-			
-			// Connect to the server
-			_serverConnection = new NetConnection();
-			_serverConnection.addEventListener( NetStatusEvent.NET_STATUS, onConnectionStatus );
-			_serverConnection.connect( serverUrl );
 			
 			// Set up the config
-			_recordingMode = recordingMode;
-			_framerate = DEFAULT_FRAMERATE;
-			_audiorate = DEFAULT_AUDIORATE;
-			_width = DEFAULT_VIDEO_WIDTH;
-			_height = DEFAULT_VIDEO_HEIGHT;
-			_quality = DEFAULT_VIDEO_QUALITY;
-        		_bandwidth = DEFAULT_VIDEO_BANDWIDTH;
+                        _serverURL  = getStringVar("serverURL", null);
 
-			if( options && options.hasOwnProperty('framerate') && options.framerate > 0 )
-				_framerate = options.framerate;
-			if( options && options.hasOwnProperty('audiorate') && options.audiorate > 0 )
-				_audiorate = options.audiorate;
+			_recordingMode = getStringVar("recordingMode", DEFAULT_RECORDING_MODE);
 
-			if( options && options.hasOwnProperty('width') && options.width > 0 )
-				_width = options.width;
-			if( options && options.hasOwnProperty('height') && options.height > 0 )
-				_height = options.height;
-			if( options && options.hasOwnProperty('quality') && options.quality > 0 )
-				_quality = options.quality;
-			if( options && options.hasOwnProperty('bandwidth') && options.bandwidth > 0 )
-				_bandwidth = options.bandwidth;
-			
+			// Check the recording mode
+			if( !( _recordingMode == VIDEO || _recordingMode == AUDIO ) )
+			{
+				log( 'error', 'init - recordingMode should be either ' + VIDEO + ' or ' + AUDIO + '(given: ' + _recordingMode + ')' );
+                                _recordingMode = WebcamRecorder.VIDEO;
+			}
+
+			_jsListener = getStringVar("jsListener", null);
+			_framerate = getUIntVar("framerate", DEFAULT_FRAMERATE);
+			_audiorate = getUIntVar("audiorate", DEFAULT_AUDIORATE);
+			_width = getUIntVar("width", DEFAULT_VIDEO_WIDTH);
+			_height = getUIntVar("height", DEFAULT_VIDEO_HEIGHT);
+			_quality = getUIntVar("quality", DEFAULT_VIDEO_QUALITY);
+        		_bandwidth = getUIntVar("bandwidth", DEFAULT_VIDEO_BANDWIDTH);
+        		_notificationFrequency = getUIntVar("notificationFrequency", DEFAULT_NOTIFICATION_FREQUENCY); 
+
+			setUpJSApi();
+								
 			// Add the video preview
        		        _videoPreview = new Video(_width, _height);
 			FlexGlobals.topLevelApplication.stage.addChild( _videoPreview );
@@ -260,10 +267,36 @@ package
 			// Set up the timers
 			_recordingTimer = new Timer( 1000 );
 			_playingTimer = new Timer( 1000 );
-			
-			// Set up the JS notifications
-			if( options && options.hasOwnProperty('jsListener') && options.hasOwnProperty('notificationFrequency') )
-				setUpJSNotifications( options.jsListener, options.notificationFrequency );
+
+			if(_jsListener != null) {
+				setUpJSNotifications(_jsListener);
+                         }
+
+		        if (_serverURL != null) 
+		        {
+			    // Connect to the server
+				_serverConnection = new NetConnection();
+				_serverConnection.addEventListener( NetStatusEvent.NET_STATUS, onConnectionStatus );
+				_serverConnection.connect(_serverURL );
+                    	} else {
+                            setUpRecording();
+                        }
+
+
+                        notify(READY);
+		}
+		
+                private function getStringVar(key:String, value:String):String {
+                     if(FlexGlobals.topLevelApplication.parameters.hasOwnProperty(key)) {
+                           var ret:String = FlexGlobals.topLevelApplication.parameters[key];
+                           return ret                    
+                     } else {
+                           return value;
+                     }
+		}
+
+                private function getUIntVar(key:String, value:int):int {
+                    return parseInt(getStringVar(key, String(value)));
 		}
 		
 		public function record( recordId:String ):void
@@ -294,6 +327,30 @@ package
 			notify( STARTED_RECORDING );
 		}
 		
+                public function stillRecord(url:String, quality:int = 100):void {
+                    var data:BitmapData = new BitmapData(_webcam.width,_webcam.height);
+                    data.draw(_videoPreview);
+
+                    var encoder:JPGEncoder = new JPGEncoder(quality);
+	            var byteArray:ByteArray = encoder.encode(data); 
+	            var header:URLRequestHeader = new URLRequestHeader("Content-type", "image/jpeg");
+	            var request:URLRequest = new URLRequest(url);
+	            request.requestHeaders.push(header);
+	            request.method = URLRequestMethod.POST;
+	            request.data = byteArray;
+                    
+	            var urlLoader:URLLoader = new URLLoader();
+	            urlLoader.addEventListener(Event.COMPLETE, sendComplete);                    
+	            urlLoader.addEventListener(IOErrorEvent.IO_ERROR, errorHandler);
+	            urlLoader.load(request);
+	            function sendComplete(event:Event):void{
+                         notify(STILL_SENT, urlLoader.data);
+	            }                    
+	            function errorHandler(event:Event):void{
+                         notify(STILL_SEND_ERROR, urlLoader.data);    
+	            }
+                }
+
 		/** Stop the current recording without the possibility to resume it. */
 		public function stopRecording():void
 		{
@@ -461,7 +518,7 @@ package
 			if( event.info.code == "NetConnection.Connect.Success" )
 				setUpRecording();
 			else if( event.info.code == "NetConnection.Connect.Failed" || event.info.code == "NetConnection.Connect.Rejected" )
-				log( 'error', 'Couldn\'t connect to the server. Error: ' + event.info.description );
+			    log( 'error', 'Couldn\'t connect to the server. Error: ' + event.info.description );
 		}
 		
 		/** Set up the JS API */
@@ -474,7 +531,6 @@ package
 			}
 			
 			Security.allowDomain('*');
-			ExternalInterface.addCallback( 'init', init );
 			ExternalInterface.addCallback( 'record', record );
 			ExternalInterface.addCallback( 'pauseRecording', pauseRecording );
 			ExternalInterface.addCallback( 'stopRecording', stopRecording );
@@ -483,22 +539,26 @@ package
 			ExternalInterface.addCallback( 'seek', seek );
 			ExternalInterface.addCallback( 'pausePlaying', pausePlaying );
 			ExternalInterface.addCallback( 'detectHighestResolution', detectHighestResolution );
+
 			ExternalInterface.addCallback( 'currentFPS', currentFPS);
+			ExternalInterface.addCallback( 'stillRecord', stillRecord);
+
 			log( 'info', 'JS API initialized' );
 		}
 		
 		/** Set up the JS notifications */
-		private function setUpJSNotifications( jsListener:String, notificationFrequency:Number ):void
+		private function setUpJSNotifications( jsListener:String):void
 		{
-			// Check the notification frequency
-			if( !( notificationFrequency >= 0 ) )
-				log( 'warn', 'init - notificationFrequency has to be greater or equal to zero! We won\' notify for this session.' );
-			
 			// Set up the notifications
 			_jsListener = jsListener;
-			if( notificationFrequency > 0 )
+
+			// Check the notification frequency
+			if( !( _notificationFrequency >= 0 ) )
+				log( 'warn', 'init - notificationFrequency has to be greater or equal to zero! We won\' notify for this session.' );
+			
+			if( _notificationFrequency > 0 )
 			{
-				_notificationTimer = new Timer( (1/notificationFrequency)*1000 );
+				_notificationTimer = new Timer( (1/_notificationFrequency)*1000 );
 				_notificationTimer.start();
 			}
 		}
@@ -529,9 +589,12 @@ package
 				_microphone.rate = _audiorate;
 				
 				// Just to trigger the security window when initializing the component in audio mode
-				var testStream : NetStream = new NetStream( _serverConnection );
-				testStream.attachAudio( _microphone );
-				testStream.attachAudio( null );
+				if(_serverConnection) 
+				{
+                                        var testStream : NetStream = new NetStream( _serverConnection );
+				        testStream.attachAudio( _microphone );
+                                        testStream.attachAudio( null );
+				}
 			}
 		}
 		
@@ -555,7 +618,7 @@ package
 		{
 			if( !_jsListener || !ExternalInterface.available )
 				return;
-			
+
 			ExternalInterface.call( _jsListener, type, arguments );
 		}
 		
@@ -595,7 +658,9 @@ package
 			
 			// Start incrementing the recording time and dispatching notifications
 			_recordingTimer.start();
-			_notificationTimer.addEventListener( TimerEvent.TIMER, notifyRecordingTime );
+                        if (_notificationTimer){
+   			   _notificationTimer.addEventListener( TimerEvent.TIMER, notifyRecordingTime );
+                        }
 		}
 		
 		/** Stop the publish stream or monitor the buffer size */
@@ -616,14 +681,15 @@ package
 			}
 			
 			// Stop incrementing the recording time and dispatching notifications
-			_notificationTimer.removeEventListener( TimerEvent.TIMER, notifyRecordingTime );
+                        if (_notificationTimer){
+ 			     _notificationTimer.removeEventListener( TimerEvent.TIMER, notifyRecordingTime );
+                        }
 			_recordingTimer.stop();
 		}
 		
 		/** Check the buffer length and stop the publish stream if empty */
 		private function checkBufferLength( event:Event ):void
 		{
-			log('debug', 'check buffer length');
 			// Do nothing if the buffer is still not empty
 			if( _publishStream.bufferLength > 0 )
 				return;
@@ -651,7 +717,9 @@ package
 			notify( END_PLAYING, { time: _playingTimer.currentCount } );
 			
 			// Reset the playing timer and stop scheduled notifications
-			_notificationTimer.removeEventListener( TimerEvent.TIMER, notifyPlayedTime );
+                        if (_notificationTimer) {
+ 			    _notificationTimer.removeEventListener( TimerEvent.TIMER, notifyPlayedTime );
+                        }
 			_playingTimer.stop();
 			_playingTimer.reset();
 			
@@ -686,7 +754,9 @@ package
 			
 			// Start incrementing the played time and dispatching notifications
 			_playingTimer.start();
-			_notificationTimer.addEventListener( TimerEvent.TIMER, notifyPlayedTime );
+                        if (_notificationTimer){
+			    _notificationTimer.addEventListener( TimerEvent.TIMER, notifyPlayedTime );
+                        }
 		}
 		
 		/** Stop the play stream */
