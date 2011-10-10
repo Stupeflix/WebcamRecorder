@@ -151,15 +151,7 @@ package
 		//------------------------------------//
 		
 		/** Constructor: Set up the JS API and read flash vars
-		 * 
-		 * @param serverUrl String: The Wowza server URL (eg: rtmp://localhost/WebcamRecorder).
-		 * 
-		 * @param recordingMode String: Can be either WebcamRecorder.VIDEO or WebcamRecorder.AUDIO.
-		 * Note that WebcamRecorder.VIDEO includes audio recording if a microphone is available.
-		 * 
-		 * @param options Object (optional): An object defining custom values for one or more of the following
-		 * options:
-		 * 
+		 * Flash vars description:
 		 * <table>
 		 * 		<tr>
 		 * 			<th>Key</th>
