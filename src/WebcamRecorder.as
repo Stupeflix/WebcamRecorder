@@ -275,12 +275,15 @@ package
 			{
 				log( 'error', 'init - recordingMode should be either ' + VIDEO + ' or ' + AUDIO + '(given: ' + _recordingMode + ')' );
                                 _recordingMode = WebcamRecorder.VIDEO;
+
 			}
                         			
 			// Add the video preview
        		        _videoPreview = new Video(_width, _height);
+                        stageResizeHandler();
 			FlexGlobals.topLevelApplication.stage.addChild( _videoPreview );
-			
+			FlexGlobals.topLevelApplication.stage.addEventListener(Event.RESIZE, stageResizeHandler);
+
 			// Set up the timers
 			_recordingTimer = new Timer( 1000 );
 			_playingTimer = new Timer( 1000 );
@@ -302,6 +305,11 @@ package
 
                         notify(READY);
 		}
+
+                public function stageResizeHandler(event:Event = null):void{
+                    _videoPreview.width = FlexGlobals.topLevelApplication.stage.stageWidth;
+                    _videoPreview.height = FlexGlobals.topLevelApplication.stage.stageHeight;
+                }
 
                 public function hasCamera():Boolean {
                      return _hasCamera;

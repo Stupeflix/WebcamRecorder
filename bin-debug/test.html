@@ -5,7 +5,8 @@
 	</head>
 	
 	<body>
-		<object id="recorder" width="640" height="360">
+               <div style="width:640px;height:360px" >
+		<object id="recorder" width="100%" height="100%">
 				<param name="movie" value="./WebcamRecorderApp.swf" />
 				<param name="quality" value="high" />
 				<param name="bgcolor" value="#ffffff" />
@@ -13,7 +14,7 @@
                                 <param name ="flashVars" value="recordingMode=video&serverURL=rtmp://localhost/WebcamRecorder&jsListener=jsListener" />
 				<embed name="recorder" src="./WebcamRecorderApp.swf"
 					quality="high" bgcolor="#ffffff"
-					width="640" height="360" align="middle"
+					width="100%" height="100%"
 					play="true"
 					loop="false"
 					quality="high"
@@ -23,6 +24,7 @@
 					pluginspage="http://www.adobe.com/go/getflashplayer">
 				</embed>
 		</object>
+                </div>
 		
 		<script type="text/javascript">
 			
