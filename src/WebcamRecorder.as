@@ -80,6 +80,10 @@ package
 		//									  //
 		//------------------------------------//
 
+
+		/** Type of the notification dispatched when the object has detected if there is a camera or not*/
+		public static const CAMERA : String = "Camera";
+
 		/** Type of the notification dispatched when the object is initialized */
 		public static const READY : String = "Ready";
 		
@@ -255,6 +259,8 @@ package
                             _hasCamera = false;
                         }
 
+                        notify(CAMERA, _hasCamera);
+
                         if (_detectOnly == "true") {
                             return;
                         }
@@ -270,7 +276,6 @@ package
 				log( 'error', 'init - recordingMode should be either ' + VIDEO + ' or ' + AUDIO + '(given: ' + _recordingMode + ')' );
                                 _recordingMode = WebcamRecorder.VIDEO;
 			}
-
                         			
 			// Add the video preview
        		        _videoPreview = new Video(_width, _height);
