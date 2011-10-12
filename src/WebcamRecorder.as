@@ -119,6 +119,8 @@ package
 		//									  //
 		//------------------------------------//
 		
+		private var _detectOnly : String;
+		private var _hasCamera : Boolean;
 		private var _recordingMode : String;
 		private var _serverURL : String;
 		private var _serverConnection : NetConnection;
@@ -158,6 +160,12 @@ package
 		 * 			<th>Value type</th>
 		 * 			<th>Default value</th>
 		 * 			<th>Description</th>
+		 * 		</tr>
+                 * 		<tr>
+		 * 			<td>detectOnly</td>
+		 * 			<td>String</td>
+		 * 			<td>false</td>
+		 * 			<td>If true, the object won't be usable to record a webcam, but just to detect it with the function "hasCamera"/td>
 		 * 		</tr>
 		 * 		<tr>
 		 * 			<td>serverURL</td>
@@ -229,6 +237,28 @@ package
 		public function WebcamRecorder()
 		{
 			
+			_detectOnly = getStringVar("detectOnly", "false");
+			_jsListener = getStringVar("jsListener", null);
+			_framerate = getUIntVar("framerate", DEFAULT_FRAMERATE);
+			_audiorate = getUIntVar("audiorate", DEFAULT_AUDIORATE);
+			_width = getUIntVar("width", DEFAULT_VIDEO_WIDTH);
+			_height = getUIntVar("height", DEFAULT_VIDEO_HEIGHT);
+			_quality = getUIntVar("quality", DEFAULT_VIDEO_QUALITY);
+        		_bandwidth = getUIntVar("bandwidth", DEFAULT_VIDEO_BANDWIDTH);
+        		_notificationFrequency = getUIntVar("notificationFrequency", DEFAULT_NOTIFICATION_FREQUENCY);
+
+			setUpJSApi();
+
+                        if (Camera.names.length != 0) {
+                            _hasCamera = true;
+                        } else {
+                            _hasCamera = false;
+                        }
+
+                        if (_detectOnly == "true") {
+                            return;
+                        }
+					
 			// Set up the config
                         _serverURL  = getStringVar("serverURL", null);
 
@@ -241,17 +271,7 @@ package
                                 _recordingMode = WebcamRecorder.VIDEO;
 			}
 
-			_jsListener = getStringVar("jsListener", null);
-			_framerate = getUIntVar("framerate", DEFAULT_FRAMERATE);
-			_audiorate = getUIntVar("audiorate", DEFAULT_AUDIORATE);
-			_width = getUIntVar("width", DEFAULT_VIDEO_WIDTH);
-			_height = getUIntVar("height", DEFAULT_VIDEO_HEIGHT);
-			_quality = getUIntVar("quality", DEFAULT_VIDEO_QUALITY);
-        		_bandwidth = getUIntVar("bandwidth", DEFAULT_VIDEO_BANDWIDTH);
-        		_notificationFrequency = getUIntVar("notificationFrequency", DEFAULT_NOTIFICATION_FREQUENCY); 
-
-			setUpJSApi();
-								
+                        			
 			// Add the video preview
        		        _videoPreview = new Video(_width, _height);
 			FlexGlobals.topLevelApplication.stage.addChild( _videoPreview );
@@ -277,6 +297,10 @@ package
 
                         notify(READY);
 		}
+
+                public function hasCamera():Boolean {
+                     return _hasCamera;
+                }
 		
                 private function getStringVar(key:String, value:String):String {
                      if(FlexGlobals.topLevelApplication.parameters.hasOwnProperty(key)) {
@@ -534,6 +558,7 @@ package
 
 			ExternalInterface.addCallback( 'currentFPS', currentFPS);
 			ExternalInterface.addCallback( 'stillRecord', stillRecord);
+			ExternalInterface.addCallback( 'hasCamera', hasCamera);
 
 			log( 'info', 'JS API initialized' );
 		}
