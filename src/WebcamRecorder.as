@@ -3,6 +3,7 @@ package
 	import flash.events.Event;
         import flash.events.IOErrorEvent;
 	import flash.events.EventDispatcher;
+        import flash.events.StatusEvent;
 	import flash.events.NetStatusEvent;
 	import flash.events.TimerEvent;
 	import flash.external.ExternalInterface;
@@ -63,7 +64,7 @@ package
 		private static const DEFAULT_VIDEO_WIDTH : uint = 640;
 		
 		/** Video height (in pixels) */
-		private static const DEFAULT_VIDEO_HEIGHT : uint = 360;
+		private static const DEFAULT_VIDEO_HEIGHT : uint = 480;
 
 		/** Video quality (0-100) */
 		private static const DEFAULT_VIDEO_QUALITY : uint = 88;		
@@ -84,6 +85,15 @@ package
 		/** Type of the notification dispatched when the object has detected if there is a camera or not*/
 		public static const CAMERA : String = "Camera";
 
+		/** Type of the notification dispatched when the object has detected if there is a camera or not*/
+		public static const MICROPHONE : String = "Microphone";
+
+	        /** Type of the notification dispatched when the user as enabled the camera: the message will be muted / unmuted */
+		public static const CAMERA_ENABLED : String = "CameraEnabled";
+
+	        /** Type of the notification dispatched when the user as enabled the camera: the message will be muted / unmuted */
+		public static const MICROPHONE_ENABLED : String = "MicrophoneEnabled";
+
 		/** Type of the notification dispatched when the object is initialized */
 		public static const READY : String = "Ready";
 		
@@ -95,6 +105,9 @@ package
 		
 		/** Type of the notification dispatched when a recording stops */
 		public static const STOPPED_RECORDING : String = "StoppedRecording";
+
+		/** Type of the notification dispatched when a recording stops */
+		public static const FLUSHED_RECORDING : String = "FlushedRecording";
 		
 		/** Type of the notification dispatched periodically while recording */
 		public static const RECORDING_TIME : String = "RecordingTime";
@@ -125,6 +138,7 @@ package
 		
 		private var _detectOnly : String;
 		private var _hasCamera : Boolean;
+		private var _hasMicrophone : Boolean;
 		private var _recordingMode : String;
 		private var _serverURL : String;
 		private var _serverConnection : NetConnection;
@@ -219,7 +233,7 @@ package
 		 * 		<tr>
 		 * 			<td>height</td>
 		 * 			<td>uint</td>
-		 * 			<td>360</td>
+		 * 			<td>480</td>
 		 * 			<td>The video height.</td>
 		 * 		</tr>
 		 * 		<tr>
@@ -253,13 +267,24 @@ package
 
 			setUpJSApi();
 
-                        if (Camera.names.length != 0) {
-                            _hasCamera = true;
-                        } else {
-                            _hasCamera = false;
+                        _hasCamera = false;
+
+                        if (Camera.names.length > 0) {
+                            var webcam:Camera = Camera.getCamera();
+                            if (webcam != null && webcam){
+                                _hasCamera = true;
+                            }
+                        }
+
+                        if (Microphone.names.length > 0) {
+                            var microphone:Microphone = Microphone.getMicrophone();
+                            if (microphone != null && microphone){
+                                _hasMicrophone = true;
+                            }
                         }
 
                         notify(CAMERA, _hasCamera);
+                        notify(MICROPHONE, _hasMicrophone);
 
                         if (_detectOnly == "true") {
                             return;
@@ -516,6 +541,7 @@ package
                 private function detectHighestResolution(width:int, height:int, framerate:int, favorArea:Boolean):Dictionary
 		{
 		    var webcam:Camera = Camera.getCamera();
+
 		    webcam.setMode(width, height, framerate, favorArea);
 
                     var dict:Dictionary = new Dictionary();
@@ -603,7 +629,12 @@ package
 				if( !_webcam )
 				{
 					_webcam = Camera.getCamera();
-					_webcam.setMode(_width, _height, _framerate, false );
+                                        if (! _webcam.muted) {
+			                    notify( CAMERA_ENABLED, "unmuted");
+                                        }
+                                        _webcam.addEventListener(StatusEvent.STATUS, notifyCameraEnabled);
+
+					_webcam.setMode(_width, _height, _framerate, true);
 					_webcam.setQuality(_bandwidth, _quality );
 					_webcam.setKeyFrameInterval( _framerate );
 				}
@@ -616,15 +647,23 @@ package
 			if( !_microphone )
 			{
 				_microphone = Microphone.getMicrophone();
-				_microphone.rate = _audiorate;
-				
-				// Just to trigger the security window when initializing the component in audio mode
-				if(_serverConnection) 
-				{
-                                        var testStream : NetStream = new NetStream( _serverConnection );
-				        testStream.attachAudio( _microphone );
-                                        testStream.attachAudio( null );
-				}
+                                if (_microphone != null && _microphone) {
+                                        if (! _microphone.muted) {
+			                    notify( MICROPHONE_ENABLED, "unmuted");
+                                        }
+
+                                        _webcam.addEventListener(StatusEvent.STATUS, notifyMicrophoneEnabled);
+
+				        _microphone.rate = _audiorate;           
+				    
+				        // Just to trigger the security window when initializing the component in audio mode
+				        if(_serverConnection) 
+				        {
+                                            var testStream : NetStream = new NetStream( _serverConnection );
+				            testStream.attachAudio( _microphone );
+                                            testStream.attachAudio( null );
+				        }
+                                }
 			}
 		}
 		
@@ -650,6 +689,19 @@ package
 				return;
 
 			ExternalInterface.call( _jsListener, type, arguments );
+		}
+
+		/** Notify camera enabled */
+		private function notifyCameraEnabled( event:StatusEvent ):void
+		{
+		    notify( CAMERA_ENABLED, event.code.substr(7).toLowerCase());
+		}
+		
+
+		/** Notify camera enabled */
+		private function notifyMicrophoneEnabled( event:StatusEvent ):void
+		{
+		    notify( MICROPHONE_ENABLED, event.code.substr(7).toLowerCase());
 		}
 		
 		/** Notify of the recording time */
@@ -738,6 +790,8 @@ package
 		{
 			_publishStream.publish( null );
 			_publishStream = null;
+
+                        notify(FLUSHED_RECORDING, null);
 		}
 		
 		/** Stop the playback and go back to the webcam preview when the playback ends */
