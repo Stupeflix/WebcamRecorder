@@ -10,9 +10,11 @@ package
 	import flash.media.Camera;
 	import flash.media.Microphone;
 	import flash.media.Video;
+        import flash.media.SoundCodec;
 	import flash.net.NetConnection;
 	import flash.net.NetStream;
 	import flash.system.Security;
+        import flash.system.SecurityPanel;
 	import flash.utils.Timer;
 	import flash.utils.Dictionary;
 	import mx.core.FlexGlobals;
@@ -51,14 +53,24 @@ package
 		/** Recording mode using the microphone to record audio */
 		public static const AUDIO : String = "audio";
 
+		/** Recording mode using the microphone to record audio */
+		public static const SPEEX : String = SoundCodec.SPEEX;
+	        public static const NELLYMOSER : String = SoundCodec.NELLYMOSER;
+
 		/** Recording mode */
 		private static const DEFAULT_RECORDING_MODE : String = VIDEO;
 		
 		/** Video framerate */
-		private static const DEFAULT_FRAMERATE : uint = 30;
+		private static const DEFAULT_FRAMERATE : uint = 25;
+
+		/** Recording Buffering */
+		private static const DEFAULT_RECORD_BUFFER_TIME : uint = 5000;
 		
 		/** Audio rate */
-		private static const DEFAULT_AUDIORATE : uint = 44;
+		private static const DEFAULT_AUDIO_RATE : uint = 44;
+
+		/** Audio codec */
+		private static const DEFAULT_AUDIO_CODEC : String = NELLYMOSER;
 		
 		/** Video width (in pixels) */
 		private static const DEFAULT_VIDEO_WIDTH : uint = 640;
@@ -67,7 +79,10 @@ package
 		private static const DEFAULT_VIDEO_HEIGHT : uint = 480;
 
 		/** Video quality (0-100) */
-		private static const DEFAULT_VIDEO_QUALITY : uint = 88;		
+	        private static const DEFAULT_VIDEO_QUALITY : uint = 88;
+
+		/** Audio quality (0-10) when using speex codec */
+		private static const DEFAULT_AUDIO_QUALITY : uint = 10;
 
    	        /** Video max bandwidth, in bytes per second */
 		private static const DEFAULT_VIDEO_BANDWIDTH : uint = 0;		
@@ -140,11 +155,14 @@ package
 		private var _hasCamera : Boolean;
 		private var _hasMicrophone : Boolean;
 		private var _recordingMode : String;
+                private var _recordBufferTime : Number; // milliseconds
 		private var _serverURL : String;
 		private var _serverConnection : NetConnection;
 		private var _jsListener : String;
 		private var _framerate : uint;
 		private var _audiorate : uint;
+	        private var _audiocodec : String;
+	        private var _audioquality : uint;
 		private var _width : uint;
 		private var _height : uint;
 		private var _quality : uint;
@@ -161,9 +179,7 @@ package
 		private var _recordingTimer : Timer;
 		private var _playingTimer : Timer;
 		private var _flushBufferTimer : Timer;
-		
-		
-		
+
 		//------------------------------------//
 		//									  //
 		//				PUBLIC API			  //
@@ -221,8 +237,20 @@ package
 		 * 		<tr>
 		 * 			<td>audiorate</td>
 		 * 			<td>uint</td>
-		 * 			<td>11</td>
+		 * 			<td>44</td>
 		 * 			<td>The microphone audio rate.</td>
+		 * 		</tr>
+		 * 		<tr>
+		 * 			<td>audiocodec</td>
+		 * 			<td>string</td>
+		 * 			<td>Speex</td>
+		 * 			<td>The microphone codec to use : Speex or NellyMoser.</td>
+		 * 		</tr>
+		 * 		<tr>
+		 * 			<td>audioquality</td>
+		 * 			<td>uint</td>
+		 * 			<td>10</td>
+		 * 			<td>The microphone audio quality when using Speex.</td>
 		 * 		</tr>
 		 * 		<tr>
 		 * 			<td>width</td>
@@ -248,6 +276,13 @@ package
 		 * 			<td>0</td>
 		 * 			<td>The video max bandwidth (default is infinite).</td>
 		 * 		</tr>
+		 * 		<tr>
+		 * 			<td>recordBufferTime</td>
+		 * 			<td>uint</td>
+		 * 			<td>5000</td>
+		 * 			<td>The video recording time in milliseconds (default is 5s).</td>
+		 * 		</tr>
+		 * </table
 		 * </table>
 		 * </table>
 		 */
@@ -258,7 +293,10 @@ package
 			_detectOnly = getStringVar("detectOnly", "false");
 			_jsListener = getStringVar("jsListener", null);
 			_framerate = getUIntVar("framerate", DEFAULT_FRAMERATE);
-			_audiorate = getUIntVar("audiorate", DEFAULT_AUDIORATE);
+                        _recordBufferTime = getUIntVar("recordBufferTime", DEFAULT_RECORD_BUFFER_TIME) / 1000.0;
+			_audiorate = getUIntVar("audiorate", DEFAULT_AUDIO_RATE);
+			_audiocodec = getStringVar("audiocodec", DEFAULT_AUDIO_CODEC);
+			_audioquality = getUIntVar("audioquality", DEFAULT_AUDIO_QUALITY);
 			_width = getUIntVar("width", DEFAULT_VIDEO_WIDTH);
 			_height = getUIntVar("height", DEFAULT_VIDEO_HEIGHT);
 			_quality = getUIntVar("quality", DEFAULT_VIDEO_QUALITY);
@@ -271,10 +309,11 @@ package
 
                         if (Camera.names.length > 0) {
                             var webcam:Camera = Camera.getCamera();
+
                             if (webcam != null && webcam){
                                 _hasCamera = true;
                             }
-                        }
+                         }
 
                         if (Microphone.names.length > 0) {
                             var microphone:Microphone = Microphone.getMicrophone();
@@ -305,6 +344,7 @@ package
                         			
 			// Add the video preview
        		        _videoPreview = new Video(_width, _height);
+                        _videoPreview.smoothing = true;
                         stageResizeHandler();
 			FlexGlobals.topLevelApplication.stage.addChild( _videoPreview );
 			FlexGlobals.topLevelApplication.stage.addEventListener(Event.RESIZE, stageResizeHandler);
@@ -330,6 +370,14 @@ package
 
                         notify(READY);
 		}
+
+            // key are defined in SecurityPanel config : http://help.adobe.com/en_US/FlashPlatform/reference/actionscript/3/flash/system/SecurityPanel.html 
+                public function showSettings(key:String):void {
+                    if (key == null) {
+                        key = SecurityPanel.CAMERA;
+                    }
+                    Security.showSettings(key);
+                }
 
                 public function stageResizeHandler(event:Event = null):void{
                     _videoPreview.width = FlexGlobals.topLevelApplication.stage.stageWidth;
@@ -536,9 +584,12 @@ package
 			_notificationTimer.removeEventListener( TimerEvent.TIMER, notifyPlayedTime );
 			_playingTimer.stop();
 		}
-		
 
-                private function detectHighestResolution(width:int, height:int, framerate:int, favorArea:Boolean):Dictionary
+            public function remainingBufferLength():uint {
+                return _publishStream.bufferLength;
+            }
+
+            private function detectHighestResolution(width:int, height:int, framerate:int, favorArea:Boolean):Dictionary
 		{
 		    var webcam:Camera = Camera.getCamera();
 
@@ -598,6 +649,8 @@ package
 			ExternalInterface.addCallback( 'currentFPS', currentFPS);
 			ExternalInterface.addCallback( 'stillRecord', stillRecord);
 			ExternalInterface.addCallback( 'hasCamera', hasCamera);
+			ExternalInterface.addCallback( 'showSettings', showSettings);
+		        ExternalInterface.addCallback( 'remainingBufferLength', remainingBufferLength);
 
 			log( 'info', 'JS API initialized' );
 		}
@@ -632,11 +685,11 @@ package
                                         if (! _webcam.muted) {
 			                    notify( CAMERA_ENABLED, "unmuted");
                                         }
-                                        _webcam.addEventListener(StatusEvent.STATUS, notifyCameraEnabled);
 
 					_webcam.setMode(_width, _height, _framerate, true);
 					_webcam.setQuality(_bandwidth, _quality );
 					_webcam.setKeyFrameInterval( _framerate );
+                                        _webcam.addEventListener(StatusEvent.STATUS, notifyCameraEnabled);
 				}
 				
 				_videoPreview.attachNetStream( null );
@@ -653,9 +706,14 @@ package
                                         }
 
                                         _webcam.addEventListener(StatusEvent.STATUS, notifyMicrophoneEnabled);
+                                        _microphone.rate = _audiorate;
+                                        _microphone.codec = _audiocodec;
+                                        _microphone.setSilenceLevel(0);
+                                        if (_audiocodec == SPEEX) {
+                                            _microphone.encodeQuality = _audioquality;
+                                            _microphone.framesPerPacket = 1;
+                                        }
 
-				        _microphone.rate = _audiorate;           
-				    
 				        // Just to trigger the security window when initializing the component in audio mode
 				        if(_serverConnection) 
 				        {
@@ -736,7 +794,7 @@ package
 			_publishStream.attachAudio( _microphone );
 			
 			// Set the buffer
-			_publishStream.bufferTime = 20;
+			_publishStream.bufferTime = _recordBufferTime;
 			
 			// Start incrementing the recording time and dispatching notifications
 			_recordingTimer.start();
@@ -769,6 +827,8 @@ package
 			_recordingTimer.stop();
 		}
 		
+
+
 		/** Check the buffer length and stop the publish stream if empty */
 		private function checkBufferLength( event:Event ):void
 		{
