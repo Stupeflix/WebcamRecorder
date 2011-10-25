@@ -64,7 +64,7 @@ package
 		private static const DEFAULT_FRAMERATE : uint = 25;
 
 		/** Recording Buffering */
-		private static const DEFAULT_RECORD_BUFFER_TIME : uint = 5000;
+		private static const DEFAULT_RECORD_BUFFER_TIME : uint = 20000;
 		
 		/** Audio rate */
 		private static const DEFAULT_AUDIO_RATE : uint = 44;
@@ -585,8 +585,12 @@ package
 			_playingTimer.stop();
 		}
 
-            public function remainingBufferLength():uint {
-                return _publishStream.bufferLength;
+            public function remainingBufferLength():Number {
+                if(_publishStream){
+                    return _publishStream.bufferLength;
+                }else{
+                    return -1;
+                }
             }
 
             private function detectHighestResolution(width:int, height:int, framerate:int, favorArea:Boolean):Dictionary
