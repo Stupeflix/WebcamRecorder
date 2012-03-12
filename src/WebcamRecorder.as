@@ -657,10 +657,6 @@ package
             if( _recordingMode == VIDEO ) {
                 if( !_webcam ) {
                     _webcam = Camera.getCamera();
-                    if (! _webcam.muted) {
-                        notify( CAMERA_ENABLED, "unmuted");
-                    }
-
                     _webcam.setMode(_width, _height, _framerate, true);
                     _webcam.setQuality(_bandwidth, _quality );
                     _webcam.setKeyFrameInterval( _framerate );
@@ -669,6 +665,12 @@ package
                 
                 _videoPreview.attachNetStream( null );
                 _videoPreview.attachCamera( _webcam );
+                
+                if (_webcam.muted) {
+                    showSettings('privacy');
+                }else{
+                    notify( CAMERA_ENABLED, "unmuted");
+                }
             }
             
             // Audio
