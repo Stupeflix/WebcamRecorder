@@ -1,0 +1,136 @@
+<?xml version="1.0"?>
+<project name="as3corelib" basedir="../" default="compile">
+
+	<!-- ============================== -->
+	<!--  Configuration -->
+	<!-- ============================== -->
+
+	<property environment="env" />
+	
+	<fail unless="env.FLEX_HOME" message="FLEX_HOME needs to be defined as an environment variable or in the Ant build." />
+
+	<!-- Configuration -->
+	<property file="${basedir}/build/build.properties" />
+
+	<!-- Setup Flex Ant Resources -->
+	<!--property name="FLEX_HOME" location="${flex.sdk}" /-->
+	<property name="FLEX_HOME" location="${env.FLEX_HOME}" />
+	<taskdef resource="flexTasks.tasks" classpath="${FLEX_HOME}/ant/lib/flexTasks.jar" />
+	
+	<!-- ============================== -->
+	<!--  Clean and Init Targets -->
+	<!-- ============================== -->
+
+	<target name="clean" description="Removes artifacts from previous builds">
+		<delete includeemptydirs="true" failonerror="false">
+			<fileset dir="${bin.dir}" defaultexcludes="false">
+				<include name="**/*" />
+			</fileset>
+			<fileset dir="${test.bin.dir}" defaultexcludes="false">
+				<include name="**/*" />
+			</fileset>
+			<fileset dir="${docs.dir}" defaultexcludes="false">
+				<include name="**/*" />
+			</fileset>
+			<fileset dir="${report.dir}" defaultexcludes="false">
+				<include name="**/*" />
+			</fileset>
+		</delete>
+	</target>
+
+	<target name="init" description="Initializes project and destination folders">
+			<echo message="Project: ${ant.project.name}" />
+			<echo message="Flex SDK: ${FLEX_HOME}" />
+
+			<!-- Create direectories -->
+			<mkdir dir="${bin.dir}" />
+			<mkdir dir="${test.bin.dir}" />
+			<mkdir dir="${docs.dir}" />
+			<mkdir dir="${report.dir}" />
+		</target>
+	
+	<!-- ======================================= -->
+	<!--  Unit Test Targets -->
+	<!-- ======================================= -->
+	
+	<target name="compileTestRunner" depends="init" description="Compiles the test runner application.">
+
+		<!-- Compile TestRunner MXML as a SWF -->
+		<mxmlc file="${test.src.dir}/${test.application.name}.mxml" 
+			output="${test.bin.dir}/${test.application.name}.swf">
+			
+			<load-config filename="${FLEX_HOME}/frameworks/air-config.xml" />
+			
+			<source-path path-element="${src.dir}" />
+			<source-path path-element="${test.src.dir}" />
+
+			<!-- The TestRunner needs the flexunit libraries in the build/libs folder -->
+			<library-path dir="${build.libs.dir}" append="true">
+				<include name="*.swc" />
+			</library-path>
+
+			<!-- Sets java.awt.headless=true so font compilation works in headless environments -->
+			<compiler.headless-server>true</compiler.headless-server>
+		</mxmlc>
+
+		<echo message="The ${test.application.name}.swf test runner has been created in ${test.bin.dir}" />
+	</target>
+	
+	<target name="runTestsAndReport" depends="init" description="Launches the test runner, captures results, generates test report artifacts.">
+		<!-- Run FlexUnit Ant Task to execute the unit tests and capture reporting data -->
+		<taskdef resource="flexUnitTasks.tasks" classpath="${build.libs.dir}/flexUnitTasks-4.0.0.jar" />
+		<flexunit swf="${test.bin.dir}/${test.application.name}.swf" toDir="${report.dir}"
+			haltonfailure="false" verbose="false" localTrusted="false" player="air" />
+
+		<!-- Generate html JUnit-style reports based on test results -->
+		<junitreport todir="${report.dir}">
+			<fileset dir="${report.dir}">
+				<include name="TEST-*.xml" />
+			</fileset>
+			<report format="frames" todir="${report.html.dir}" />
+		</junitreport>
+
+		<echo message="The unit test reports have been created in ${report.dir}" />
+	</target>
+
+	<target name="test" depends="init, compileTestRunner, runTestsAndReport" description="Compiles unit tests and generates test report artiacts." />
+	
+	<!-- ======================================= -->
+	<!-- Compile and Document -->
+	<!-- ======================================= -->
+	
+	<target name="compile" depends="init" description="Compile the library .swc file">
+		<compc output="${bin.dir}/${library.name}.swc"
+			debug="false" optimize="true">
+			
+			<load-config filename="${FLEX_HOME}/frameworks/air-config.xml" />
+			
+			<source-path path-element="${src.dir}" />
+			<include-sources dir="${src.dir}" includes="*" />
+		</compc>
+	</target>
+	
+	<target name="docs" depends="init" description="Generate ASDoc documentation">
+		<java jar="${FLEX_HOME}/lib/asdoc.jar" 
+			dir="${FLEX_HOME}/frameworks" fork="true" failonerror="true">
+			
+			<arg line="-load-config '${FLEX_HOME}/frameworks/air-config.xml'" />
+			
+			<!-- Place the documentation in the "docs" directory -->
+			<arg line="-output ${docs.dir}" />
+			
+			<!-- Specify the main source path as "src" -->
+			<arg line="-source-path ${src.dir}" />
+			
+			<!-- Document all of the classes in the "src" tree -->
+			<arg line="-doc-sources ${src.dir} " />
+			
+			<!-- Include the library name in the window title -->
+			<arg line="-window-title 'Adobe ActionScript 3.0 Core Library - ${library.name}' "/>
+			
+		</java>
+		
+		<echo message="Documentation has been created in ${docs.dir}" />
+	</target>
+
+</project>
